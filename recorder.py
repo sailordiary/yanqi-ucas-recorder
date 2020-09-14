@@ -54,7 +54,6 @@ def parse_hdb_frame(data):
     if idx < 0 or idx >= 4:
         return {'ret': -1}
     codec = data[12: 16].decode()
-    # if codec == 'ADTS': print (nframelength, len(packet))
     res = {'ret': 0, 'header': {'codec': codec, 'idx': idx, 'flen': nframelength,
                                 'fps': nframerate, 'w': nwidth, 'h': nheight,
                                 'seg': dwsegment, 'flags': dwflags, 'tick': ntimetick,
@@ -100,6 +99,7 @@ if __name__ == '__main__':
     n_vid_packets = 0
     video_ready = [False for _ in range(2)]
     audio_ready = False
+    prev_tick = -1
 
     try:
         while True:
@@ -115,16 +115,19 @@ if __name__ == '__main__':
                 if res['header']['codec'] == 'H264':
                     screen_idx = res['header']['idx']
                     if screen_idx == 0:
-                        n_vid_packets += 1
-                        if n_vid_packets % 100 == 0:
-                            print('Status: {} frames, {} fps, seq={}'.format(
-                                n_vid_packets, res['header']['fps'], res['header']['tick']))
+                        tick = res['header']['tick']
+                        if tick != prev_tick: # n_vid_packets % 100 == 0:
+                            n_vid_packets += 1
+                            prev_tick = tick
+                            fps = res['header']['fps']
+                            print('Progress: {} frames, ~{:.2f} sec @ {} fps, tick={}'.format(
+                                n_vid_packets, n_vid_packets / fps, fps, tick))
                     if not video_ready[screen_idx] and res['header']['seg'] >= 2:
                         video_ready[screen_idx] = True
                     if video_ready[screen_idx]:
                         video_fps[screen_idx].write(res['data'])
                 elif res['header']['codec'] == 'ADTS':
-                    if not audio_ready and res['header']['seg'] >= 2:
+                    if not audio_ready and res['header']['seg'] >= 2 and video_ready:
                         audio_ready = True
                     if audio_ready:
                         audio_fp.write(pack_adts_frame(res['data']))
