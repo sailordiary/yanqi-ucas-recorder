@@ -127,7 +127,9 @@ if __name__ == '__main__':
                     if video_ready[screen_idx]:
                         video_fps[screen_idx].write(res['data'])
                 elif res['header']['codec'] == 'ADTS':
-                    if not audio_ready and res['header']['seg'] >= 2 and video_ready:
+                    audio_tick = res['header']['tick']
+                    # Sync audio and master video clocks
+                    if not audio_ready and res['header']['seg'] >= 2 and video_ready[0] and audio_tick >= tick:
                         audio_ready = True
                     if audio_ready:
                         audio_fp.write(pack_adts_frame(res['data']))
