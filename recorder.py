@@ -11,7 +11,7 @@ MSG_TYPE_LOGIN = 1
 MSG_TYPE_DATAREQ = 14
 
 SERVER_IP = '124.16.74.210'
-SERVER_PORT = '4520'
+SERVER_PORT = 4520
 
 
 def send_msg(sock, msgtype, msg):
