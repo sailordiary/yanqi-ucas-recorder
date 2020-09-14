@@ -77,20 +77,20 @@ if __name__ == '__main__':
     # Initialize socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((SERVER_IP, SERVER_PORT))
-    print('Connected to server')
+    print ('Connected to server')
 
     # Login
     user_info = b'reach' + b'\x00' * 15 + b'reachplayer' + b'\x00' * 13
     send_msg(s, MSG_TYPE_LOGIN, user_info)
     _ = recv_msg(s)
-    print('Logged in')
+    print ('Logged in')
 
     # Select channel
     channel_id = int(sys.argv[1])
     channel_info = struct.pack('i', channel_id)
     send_msg(s, MSG_TYPE_DATAREQ, channel_info)
     _ = recv_msg(s)
-    print('Opened channel')
+    print ('Opened channel')
 
     video_fps = [open('vstream{}.h264'.format(i), 'wb') for i in range(2)]
     audio_fp = open('astream.aac', 'wb')
@@ -100,12 +100,13 @@ if __name__ == '__main__':
     video_ready = [False for _ in range(2)]
     audio_ready = False
     prev_tick = -1
+    avg_fps = -1
 
     try:
         while True:
             data = recv_msg(s)
             if data is None:
-                print('No data...')
+                print ('No data...')
                 break
             # Incoming HDB frame
             if len(data) >= 48:
@@ -120,9 +121,11 @@ if __name__ == '__main__':
                             n_vid_packets += 1
                             prev_tick = tick
                             fps = res['header']['fps']
-                            print('Progress: {} frames, ~{:.2f} sec @ {} fps, tick={}'.format(
-                                n_vid_packets, n_vid_packets / fps, fps, tick))
-                    if not video_ready[screen_idx] and res['header']['seg'] >= 2:
+                            if avg_fps < 0: avg_fps = fps
+                            else: avg_fps = 0.95 * avg_fps + 0.05 * fps
+                            print ('Progress: {} frames, ~{:.2f} sec @ {:.1f} fps, tick={}'.format(
+                                n_vid_packets, n_vid_packets / avg_fps, avg_fps, tick))
+                    if not video_ready[screen_idx] and res['header']['seg'] == 2:
                         video_ready[screen_idx] = True
                     if video_ready[screen_idx]:
                         video_fps[screen_idx].write(res['data'])
@@ -134,9 +137,12 @@ if __name__ == '__main__':
                     if audio_ready:
                         audio_fp.write(pack_adts_frame(res['data']))
     except KeyboardInterrupt:
-        print('Interrupted!')
+        print ('Interrupted!')
 
     s.close()
     for video_fp in video_fps:
         video_fp.close()
     audio_fp.close()
+    
+    print ('Ref: avg_fps = {:.3f}'.format(avg_fps))
+    
