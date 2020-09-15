@@ -6,6 +6,8 @@ import socket
 import struct
 import sys
 
+import time
+
 MSG_VER = 1
 MSG_TYPE_LOGIN = 1
 MSG_TYPE_DATAREQ = 14
@@ -99,11 +101,14 @@ if __name__ == '__main__':
     n_vid_packets = 0
     video_ready = [False for _ in range(2)]
     audio_ready = False
-    prev_tick = -1
+    # NOTE: ticks may not always be available (e.g. 0),
+    # so we use packet length to differentiate frames
+    prev_flen = -1
     avg_fps = -1
 
     try:
         while True:
+            # if time.time() > 1600135860: break
             data = recv_msg(s)
             if data is None:
                 print ('No data...')
@@ -116,23 +121,21 @@ if __name__ == '__main__':
                 if res['header']['codec'] == 'H264':
                     screen_idx = res['header']['idx']
                     if screen_idx == 0:
-                        tick = res['header']['tick']
-                        if tick != prev_tick: # n_vid_packets % 100 == 0:
+                        flen = res['header']['flen']
+                        if flen != prev_flen:
                             n_vid_packets += 1
-                            prev_tick = tick
+                            prev_flen = flen
                             fps = res['header']['fps']
                             if avg_fps < 0: avg_fps = fps
                             else: avg_fps = 0.95 * avg_fps + 0.05 * fps
-                            print ('Progress: {} frames, ~{:.2f} sec @ {:.1f} fps, tick={}'.format(
-                                n_vid_packets, n_vid_packets / avg_fps, avg_fps, tick))
+                            print ('Progress: {} frames @ {} fps, avg {:.1f} fps, ~{:.2f} sec'.format(
+                                n_vid_packets, fps, avg_fps, n_vid_packets / avg_fps))
                     if not video_ready[screen_idx] and res['header']['seg'] == 2:
                         video_ready[screen_idx] = True
                     if video_ready[screen_idx]:
                         video_fps[screen_idx].write(res['data'])
                 elif res['header']['codec'] == 'ADTS':
-                    audio_tick = res['header']['tick']
-                    # Sync audio and master video clocks
-                    if not audio_ready and res['header']['seg'] >= 2 and video_ready[0] and audio_tick >= tick:
+                    if not audio_ready and res['header']['seg'] >= 2 and video_ready[0]:
                         audio_ready = True
                     if audio_ready:
                         audio_fp.write(pack_adts_frame(res['data']))
